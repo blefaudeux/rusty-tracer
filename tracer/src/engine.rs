@@ -1,52 +1,55 @@
-
-use crate::geometry::Vec3f;
 use crate::geometry::box_test;
-use crate::geometry::Ray;
 use crate::geometry::min;
+use crate::geometry::Ray;
+use crate::geometry::Vec3f;
+
+extern crate rand;
+use rand::Rng;
 
 enum HitType {
-    HitNone,
-    HitLetter,
-    HitWall,
-    HitSun
+  NoHit,
+  Letter,
+  Wall,
+  Sun,
 }
 
-
-// 15*4+1
-static letters : Vec<u8> =  concat!(           // 15 two points lines
-    "5O5_", "5W9W", "5_9_",             // P (without curve)
-    "AOEO", "COC_", "A_E_",             // I
-    "IOQ_", "I_QO",                     // X
-    "UOY_", "Y_]O", "WW[W",             // A
-    "aOa_", "aWeW", "a_e_", "cWiO").as_bytes().to_vec();    // R (without curve)
-
-
 // Sample the world using Signed Distance Fields.
-fn  sample_world(position: Vec3f) -> (f64, HitType) {
-  let mut distance : f64 = 1e9;
-  let mut hitType: HitType = HitType::HitNone;
+fn sample_world(position: Vec3f) -> (f64, HitType) {
+  let mut distance: f64 = 1e9;
+  let mut hit_type: HitType;
 
   let mut f = position; // Flattened position (z=0)
   f.z = 0.;
 
-  for i in 0..letters.len()/4 {
+  // 15*4+1
+  let letters: Vec<u8> = concat!(
+    // 15 two points lines
+    "5O5_", "5W9W", "5_9_", // P (without curve)
+    "AOEO", "COC_", "A_E_", // I
+    "IOQ_", "I_QO", // X
+    "UOY_", "Y_]O", "WW[W", // A
+    "aOa_", "aWeW", "a_e_", "cWiO"
+  )
+  .as_bytes()
+  .to_vec(); // R (without curve)
 
-    let begin = Vec3f{
-        x: letters[4*i]  as f64 - 79., 
-        y: letters[4*i + 1]  as f64 - 79., 
-        z:0.
-    }.scaled(0.5);
+  for i in 0..letters.len() / 4 {
+    let begin = Vec3f {
+      x: letters[4 * i] as f64 - 79.,
+      y: letters[4 * i + 1] as f64 - 79.,
+      z: 0.,
+    }
+    .scaled(0.5);
 
-    let end = Vec3f{
-        x : letters[i + 2] as f64- 79., 
-        y:letters[4*i + 3] as f64 - 79.,
-        z:0.
-    }.scaled(0.5) - begin;
+    let end = Vec3f {
+      x: letters[i + 2] as f64 - 79.,
+      y: letters[4 * i + 3] as f64 - 79.,
+      z: 0.,
+    }
+    .scaled(0.5)
+      - begin;
 
-    let o = f - begin + end.scaled(
-            min(
-                -min((begin - f).dot(end) / end.squared_norm(), 0.),
-                1.));
+    let o = f - begin + end.scaled(min(-min((begin - f).dot(end) / end.squared_norm(), 0.), 1.));
 
     distance = min(distance, o.squared_norm()); // compare squared distance.
   }
@@ -55,124 +58,307 @@ fn  sample_world(position: Vec3f) -> (f64, HitType) {
   distance = distance.sqrt();
 
   // Two curves (for P and R in PixaR) with hard-coded locations.
-  let curves : [Vec3f; 2] = [Vec3f{x:11., y:6., z:0.}, Vec3f{x:-11., y:6., z:0.}];
+  let curves: [Vec3f; 2] = [
+    Vec3f {
+      x: 11.,
+      y: 6.,
+      z: 0.,
+    },
+    Vec3f {
+      x: -11.,
+      y: 6.,
+      z: 0.,
+    },
+  ];
 
   for curve in curves.iter() {
-    let o = f - *curve;
+    let mut o = f - *curve;
 
-    distance = min(distance,
-                   if o.x > 0. {(o.norm() - 2.).abs()} else {
-                       o.y += o.y;
-                       if o.y > 0. {-2.} else {2.}}
-                    //    , o.norm()
-               );
+    distance = min(
+      distance,
+      if o.x > 0. {
+        (o.norm() - 2.).abs()
+      } else {
+        o.y += o.y;
+        if o.y > 0. {
+          -2.
+        } else {
+          2.
+        }
+      }, //    , o.norm()
+    );
   }
 
   distance = (distance.powi(8) + position.z.powi(8)).powf(0.125) - 0.5;
-  hitType = HitType::HitLetter;
+  hit_type = HitType::Letter;
 
-  let roomDist = min(// min(A,B) = Union with Constructive solid geometry
-               //-min carves an empty space
-                -min(
-                    // Lower room
-                    box_test(position, Vec3f{x:-30., y:-0.5, z:-30.}, Vec3f{x:30., y:18., z:30.}),
-                    
-                    // Upper room
-                    box_test(position, Vec3f{x:-25., y:17., z:-25.}, Vec3f{x:25., y:20., z:25.})
-                ),
-                box_test( // Ceiling "planks" spaced 8 units apart.
-                Vec3f{x: position.x.abs() % 8.,
-                      y:position.y,
-                      z:position.z},
-                      Vec3f{x:1.5, y:18.5, z:-25.},
-                      Vec3f{x:6.5, y:20., z:25.})
-                
+  let room_dist = min(
+    // min(A,B) = Union with Constructive solid geometry
+    //-min carves an empty space
+    -min(
+      // Lower room
+      box_test(
+        position,
+        Vec3f {
+          x: -30.,
+          y: -0.5,
+          z: -30.,
+        },
+        Vec3f {
+          x: 30.,
+          y: 18.,
+          z: 30.,
+        },
+      ),
+      // Upper room
+      box_test(
+        position,
+        Vec3f {
+          x: -25.,
+          y: 17.,
+          z: -25.,
+        },
+        Vec3f {
+          x: 25.,
+          y: 20.,
+          z: 25.,
+        },
+      ),
+    ),
+    box_test(
+      // Ceiling "planks" spaced 8 units apart.
+      Vec3f {
+        x: position.x.abs() % 8.,
+        y: position.y,
+        z: position.z,
+      },
+      Vec3f {
+        x: 1.5,
+        y: 18.5,
+        z: -25.,
+      },
+      Vec3f {
+        x: 6.5,
+        y: 20.,
+        z: 25.,
+      },
+    ),
   );
 
-  if roomDist < distance {
-      distance = roomDist;
-      hitType = HitType::HitWall;
-    }
-
-// Everything above 19.9 is light source.
-  let sun = 19.9 - position.y ; 
-  if sun < distance {
-      distance = sun;
-       hitType = HitType::HitSun;
+  if room_dist < distance {
+    distance = room_dist;
+    hit_type = HitType::Wall;
   }
 
-  return (distance, hitType);
+  // Everything above 19.9 is light source.
+  let sun = 19.9 - position.y;
+  if sun < distance {
+    distance = sun;
+    hit_type = HitType::Sun;
+  }
+
+  return (distance, hit_type);
 }
 
 // Perform signed sphere marching
-// Returns hitType 0, 1, 2, or 3 and update hit position/normal
-fn ray_marching( ray: Ray) -> (HitType, f64, f64) {
-  let mut hitType = HitType::HitNone;
-  let mut noHitCount = 0;
-  let hitPos : Vec3f = Vec3f::ones();
-  let hitNorm : Vec3f = Vec3f::ones();
+// Returns hit_type 0, 1, 2, or 3 and update hit position/normal
+fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
+  let mut hit_type = HitType::NoHit;
+  let mut no_hit_count = 0;
+  let mut hit_position: Vec3f = Vec3f::ones();
+  let mut hit_normal: Vec3f = Vec3f::ones();
 
-  let mut shortest_distance = 1e9; // distance from closest object in world.
+  let mut shortest_distance; // distance from closest object in world.
 
-  // Signed distance marching
+  // Signed distance marching.
   let mut total_distance = 0.;
   while total_distance < 100. {
-    hitPos = ray.orig + ray.dir.scaled(total_distance);
-    
-    (shortest_distance, hitType) = sample_world(hitPos);
-    noHitCount += 1;
+    // Keep marching following the SDF hints, until close enough
+    hit_position = ray.orig + ray.dir.scaled(total_distance);
+    let hit = sample_world(hit_position);
+    shortest_distance = hit.0;
+    hit_type = hit.1;
+    total_distance += shortest_distance;
+    no_hit_count += 1;
 
-    if (shortest_distance < 0.01) || noHitCount > 99 {
-        hitNorm = Vec3f{
-            x: sample_world(hitPos + Vec3f{x: 0.01, y:0., z:0.}, noHitCount)[0] - shortest_distance,
-            y: sample_world(hitPos + Vec3f{x:0., y:0.01, z:0.}, noHitCount)[0] - shortest_distance,
-            z: sample_world(hitPos + Vec3f{x:0., y:0., z:0.01}, noHitCount)[0] - shortest_distance
-        }.normalized();
+    if (shortest_distance < 0.01) || no_hit_count > 99 {
+      // We're close enough
+      // Now get the normal by computing the gradient, use finite difference
+      hit_normal = Vec3f {
+        x: sample_world(
+          hit_position
+            + Vec3f {
+              x: 0.01,
+              y: 0.,
+              z: 0.,
+            },
+        )
+        .0 - shortest_distance,
+        y: sample_world(
+          hit_position
+            + Vec3f {
+              x: 0.,
+              y: 0.01,
+              z: 0.,
+            },
+        )
+        .0 - shortest_distance,
+        z: sample_world(
+          hit_position
+            + Vec3f {
+              x: 0.,
+              y: 0.,
+              z: 0.01,
+            },
+        )
+        .0 - shortest_distance,
+      }
+      .normalized();
     }
   }
 
-  return (hitType, hitPos, hitNorm);
+  return (hit_type, hit_position, hit_normal);
 }
 
-fn Trace(ray: Ray) -> Vec3f {
-  Vec sampledPosition, normal, color, attenuation = 1;
-  Vec lightDirection(!Vec(.6, .6, 1)); // Directional light
+fn trace_sample(mut ray: Ray) -> Vec3f {
+  let sampledPosition = Vec3f::zero();
+  let normal = Vec3f::zero();
+  let mut color = Vec3f::zero();
+  let mut attenuation = Vec3f::zero();
 
-  for (int bounceCount = 3; bounceCount--;) {
-    int hitType = RayMarching(origin, direction, sampledPosition, normal);
-    if (hitType == HIT_NONE) break; // No hit. This is over, return color.
-    if (hitType == HIT_LETTER) { // Specular bounce on a letter. No color acc.
-      direction = direction + normal * ( normal % direction * -2);
-      origin = sampledPosition + direction * 0.1;
-      attenuation = attenuation * 0.2; // Attenuation via distance traveled.
+  let light_direction = Vec3f {
+    x: 0.6,
+    y: 0.6,
+    z: 1.,
+  }
+  .normalized(); // Directional light
+
+  let mut bounce_count = 3;
+  let mut rng = rand::thread_rng();
+
+  while bounce_count > 0 {
+    let hit = ray_marching(ray);
+    let hit_type = hit.0;
+
+    match hit_type {
+      HitType::NoHit => break,
+      HitType::Letter => {
+        ray.dir = ray.dir - normal.scaled(2. * normal.dot(ray.dir));
+        ray.orig = sampledPosition + ray.dir.scaled(0.1);
+        attenuation.scale(0.2); // Attenuation via distance traveled.
+      }
+      HitType::Wall => {
+        let incidence = normal.dot(light_direction);
+        let p: f64 = 6.283185 * rng.gen::<f64>();
+        let c = rng.gen::<f64>();
+        let s = (1. - c).sqrt();
+        let g = if normal.z < 0. { -1. } else { 1. };
+        let u = -1. / (g + normal.z);
+        let v = normal.x * normal.y * u;
+        ray.dir = Vec3f {
+          x: v,
+          y: g + normal.y * normal.y * u,
+          z: -normal.y * p.cos() * s,
+        } + Vec3f {
+          x: 1. + g * normal.x * normal.x * u,
+          y: g * v,
+          z: -g * normal.x * p.sin() * s,
+        } + normal.scaled(c.sqrt());
+
+        ray.orig = sampledPosition + ray.dir.scaled(0.1);
+        attenuation.scale(0.2);
+
+        if incidence > 0. {
+          let check_sun = ray_marching(Ray {
+            orig: sampledPosition + normal.scaled(0.1),
+            dir: light_direction,
+            hit_number: 0,
+          });
+
+          match check_sun.0 {
+            HitType::Sun => {
+              color += attenuation
+                * Vec3f {
+                  x: 500.,
+                  y: 400.,
+                  z: 100.,
+                }
+                .scaled(incidence);
+            }
+            _ => {}
+          }
+        }
+      }
+      HitType::Sun => {
+        color = color
+          + attenuation
+            * Vec3f {
+              x: 50.,
+              y: 80.,
+              z: 100.,
+            };
+        break; // Sun Color
+      }
     }
-    if (hitType == HIT_WALL) { // Wall hit uses color yellow?
-      float incidence = normal % lightDirection;
-      float p = 6.283185 * randomVal();
-      float c = randomVal();
-      float s = sqrtf(1 - c);
-      float g = normal.z < 0 ? -1 : 1;
-      float u = -1 / (g + normal.z);
-      float v = normal.x * normal.y * u;
-      direction = Vec(v,
-                      g + normal.y * normal.y * u,
-                      -normal.y) * (cosf(p) * s)
-                  +
-                  Vec(1 + g * normal.x * normal.x * u,
-                      g * v,
-                      -g * normal.x) * (sinf(p) * s) + normal * sqrtf(c);
-      origin = sampledPosition + direction * .1;
-      attenuation = attenuation * 0.2;
-      if (incidence > 0 &&
-          RayMarching(sampledPosition + normal * .1,
-                      lightDirection,
-                      sampledPosition,
-                      normal) == HIT_SUN)
-        color = color + attenuation * Vec(500, 400, 100) * incidence;
-    }
-    if (hitType == HIT_SUN) { //
-      color = color + attenuation * Vec(50, 80, 100); break; // Sun Color
-    }
+    bounce_count -= 1;
   }
   return color;
+}
+
+pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
+  let position = Vec3f {
+    x: -22.,
+    y: 5.,
+    z: 25.,
+  };
+
+  let goal = (Vec3f {
+    x: -3.,
+    y: 4.,
+    z: 0.,
+  } - position)
+    .normalized();
+  let left = Vec3f {
+    x: goal.z,
+    y: 0.,
+    z: -goal.x,
+  }
+  .normalized();
+  // Cross-product to get the up vector
+  let up = goal.cross(left);
+  let mut rng = rand::thread_rng();
+
+  println!("Rendering {}x{}", width, height);
+
+  for y in 0..height {
+    for x in 0..width {
+      let mut color = Vec3f::zero();
+
+      for _ in 0..sample_per_pixel {
+        color += trace_sample(Ray {
+          orig: position,
+          dir: (goal
+            + left.scaled(x as f64 - width as f64 / 2. + rng.gen::<f64>())
+            + up.scaled(y as f64 - height as f64 / 2. + rng.gen::<f64>()))
+          .normalized(),
+          hit_number: 0,
+        });
+      }
+
+      // Reinhard tone mapping
+      color.scale(1. / sample_per_pixel as f64);
+      color.offset(14. / 241.);
+
+      let mut o = color;
+      o.offset(1.);
+
+      color = Vec3f {
+        x: color.x / o.x,
+        y: color.y / o.y,
+        z: color.z / o.z,
+      }
+      .scaled(255.);
+      println!("{}{}{}", color.x, color.y, color.z);
+    }
+  }
 }

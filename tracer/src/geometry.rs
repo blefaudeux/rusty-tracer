@@ -86,6 +86,12 @@ impl Vec3f {
         self.z += other.z;
     }
 
+    pub fn offset(&mut self, bias: f64) {
+        self.x += bias;
+        self.y += bias;
+        self.z += bias;
+    }
+
     pub fn max(&self) -> f64 {
         f64::max(f64::max(self.x, self.y), self.z)
     }
