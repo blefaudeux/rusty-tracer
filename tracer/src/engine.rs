@@ -2,6 +2,7 @@ use crate::geometry::box_test;
 use crate::geometry::min;
 use crate::geometry::Ray;
 use crate::geometry::Vec3f;
+use crate::framebuffer;
 
 extern crate rand;
 use rand::Rng;
@@ -177,6 +178,7 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
     hit_position = ray.orig + ray.dir.scaled(total_distance);
     let hit = sample_world(hit_position);
     shortest_distance = hit.0;
+
     hit_type = hit.1;
     total_distance += shortest_distance;
     no_hit_count += 1;
@@ -214,6 +216,7 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
         .0 - shortest_distance,
       }
       .normalized();
+      break;
     }
   }
 
@@ -221,10 +224,8 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
 }
 
 fn trace_sample(mut ray: Ray) -> Vec3f {
-  let sampledPosition = Vec3f::zero();
-  let normal = Vec3f::zero();
   let mut color = Vec3f::zero();
-  let mut attenuation = Vec3f::zero();
+  let mut attenuation = Vec3f::ones();
 
   let light_direction = Vec3f {
     x: 0.6,
@@ -237,40 +238,44 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
   let mut rng = rand::thread_rng();
 
   while bounce_count > 0 {
+
     let hit = ray_marching(ray);
     let hit_type = hit.0;
+    let hit_pos = &hit.1;
+    let hit_normal = &hit.2;
 
+    
     match hit_type {
       HitType::NoHit => break,
       HitType::Letter => {
-        ray.dir = ray.dir - normal.scaled(2. * normal.dot(ray.dir));
-        ray.orig = sampledPosition + ray.dir.scaled(0.1);
+        ray.dir = ray.dir - hit_normal.scaled(2. * hit_normal.dot(ray.dir));
+        ray.orig = ray.orig + ray.dir.scaled(0.1);
         attenuation.scale(0.2); // Attenuation via distance traveled.
       }
       HitType::Wall => {
-        let incidence = normal.dot(light_direction);
+        let incidence = hit_normal.dot(light_direction);
         let p: f64 = 6.283185 * rng.gen::<f64>();
         let c = rng.gen::<f64>();
         let s = (1. - c).sqrt();
-        let g = if normal.z < 0. { -1. } else { 1. };
-        let u = -1. / (g + normal.z);
-        let v = normal.x * normal.y * u;
+        let g = if hit_normal.z < 0. { -1. } else { 1. };
+        let u = -1. / (g + hit_normal.z);
+        let v = hit_normal.x * hit_normal.y * u;
         ray.dir = Vec3f {
           x: v,
-          y: g + normal.y * normal.y * u,
-          z: -normal.y * p.cos() * s,
+          y: g + hit_normal.y * hit_normal.y * u,
+          z: -hit_normal.y * p.cos() * s,
         } + Vec3f {
-          x: 1. + g * normal.x * normal.x * u,
+          x: 1. + g * hit_normal.x * hit_normal.x * u,
           y: g * v,
-          z: -g * normal.x * p.sin() * s,
-        } + normal.scaled(c.sqrt());
+          z: -g * hit_normal.x * p.sin() * s,
+        } + hit_normal.scaled(c.sqrt());
 
-        ray.orig = sampledPosition + ray.dir.scaled(0.1);
+        ray.orig = hit.1 + ray.dir.scaled(0.1);
         attenuation.scale(0.2);
 
         if incidence > 0. {
           let check_sun = ray_marching(Ray {
-            orig: sampledPosition + normal.scaled(0.1),
+            orig: *hit_pos + hit_normal.scaled(0.1),
             dir: light_direction,
             hit_number: 0,
           });
@@ -329,6 +334,7 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
   let mut rng = rand::thread_rng();
 
   println!("Rendering {}x{}", width, height);
+  let mut fb = framebuffer::create_frame_buffer(width as usize, height as usize);
 
   for y in 0..height {
     for x in 0..width {
@@ -358,7 +364,15 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
         z: color.z / o.z,
       }
       .scaled(255.);
-      println!("{}{}{}", color.x, color.y, color.z);
+
+      fb.buffer[y as usize][x as usize] = color;
     }
+  }
+
+  println!("Done, saving the picture");
+  fb.normalize();
+  match fb.write_ppm("rendering.ppm") {
+    Ok(_) => {},
+    Err(_) => {println!("Failed saving the picture");}
   }
 }

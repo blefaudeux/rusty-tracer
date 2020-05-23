@@ -1,5 +1,6 @@
 mod engine;
 mod geometry;
+mod framebuffer;
 
 fn main() {
     // liberal transposition of the original code from Andrew Kensler
