@@ -1,8 +1,9 @@
+use crate::framebuffer;
 use crate::geometry::box_test;
 use crate::geometry::min;
 use crate::geometry::Ray;
 use crate::geometry::Vec3f;
-use crate::framebuffer;
+use std::time::Instant;
 
 extern crate rand;
 use rand::Rng;
@@ -12,6 +13,17 @@ enum HitType {
   Letter,
   Wall,
   Sun,
+}
+
+impl std::fmt::Display for HitType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      HitType::NoHit => write!(f, "No Hit"),
+      HitType::Letter => write!(f, "Letter"),
+      HitType::Wall => write!(f, "Wall"),
+      HitType::Sun => write!(f, "Sun"),
+    }
+  }
 }
 
 // Sample the world using Signed Distance Fields.
@@ -58,37 +70,38 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
   // Get real distance, not square distance, once all the comparisons are done
   distance = distance.sqrt();
 
-  // Two curves (for P and R in PixaR) with hard-coded locations.
-  let curves: [Vec3f; 2] = [
-    Vec3f {
-      x: 11.,
-      y: 6.,
-      z: 0.,
-    },
-    Vec3f {
-      x: -11.,
-      y: 6.,
-      z: 0.,
-    },
-  ];
+  // // Two curves (for P and R in PixaR) with hard-coded locations.
+  // let curves: [Vec3f; 2] = [
+  //   Vec3f {
+  //     x: 11.,
+  //     y: 6.,
+  //     z: 0.,
+  //   },
+  //   Vec3f {
+  //     x: -11.,
+  //     y: 6.,
+  //     z: 0.,
+  //   },
+  // ];
 
-  for curve in curves.iter() {
-    let mut o = f - *curve;
+  // for curve in curves.iter() {
+  //   let mut o = f - *curve;
+  //   let o_norm = o.norm();
 
-    distance = min(
-      distance,
-      if o.x > 0. {
-        (o.norm() - 2.).abs()
-      } else {
-        o.y += o.y;
-        if o.y > 0. {
-          -2.
-        } else {
-          2.
-        }
-      }, //    , o.norm()
-    );
-  }
+  //   let new_distance =
+  //     if o.x > 0. {
+  //       (o_norm - 2.).abs()
+  //     } else {
+  //       o.y += o.y;
+  //       // if o.y > 0. {
+  //       //   -2.
+  //       // } else {
+  //       //   2.
+  //       // }
+  //     o_norm};
+
+  //   distance = min(distance, new_distance);
+  // }
 
   distance = (distance.powi(8) + position.z.powi(8)).powf(0.125) - 0.5;
   hit_type = HitType::Letter;
@@ -238,12 +251,10 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
   let mut rng = rand::thread_rng();
 
   while bounce_count > 0 {
-
     let hit = ray_marching(ray);
     let hit_type = hit.0;
     let hit_pos = &hit.1;
     let hit_normal = &hit.2;
-
     
     match hit_type {
       HitType::NoHit => break,
@@ -295,13 +306,12 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
         }
       }
       HitType::Sun => {
-        color = color
-          + attenuation
-            * Vec3f {
-              x: 50.,
-              y: 80.,
-              z: 100.,
-            };
+        color += attenuation
+          * Vec3f {
+            x: 50.,
+            y: 80.,
+            z: 100.,
+          };
         break; // Sun Color
       }
     }
@@ -328,13 +338,15 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
     y: 0.,
     z: -goal.x,
   }
-  .normalized();
+  .normalized().scaled(1./width as f64);
+
   // Cross-product to get the up vector
   let up = goal.cross(left);
   let mut rng = rand::thread_rng();
 
   println!("Rendering {}x{}", width, height);
   let mut fb = framebuffer::create_frame_buffer(width as usize, height as usize);
+  let start_time = Instant::now();
 
   for y in 0..height {
     for x in 0..width {
@@ -365,14 +377,24 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
       }
       .scaled(255.);
 
-      fb.buffer[y as usize][x as usize] = color;
+      fb.buffer[(height - y - 1) as usize][(width - x -1) as usize] = color;
     }
   }
 
-  println!("Done, saving the picture");
+  // Compute render time
+  let elapsed = start_time.elapsed();
+  let render_time_ms =
+  elapsed.as_secs() * 1_000 + u64::from(elapsed.subsec_nanos()) / 1_000_000;
+  
+  // Compute the equivalent sample per pixel for a one minute computation budget
+  // TODO
+
+  println!("Done in {}ms, saving the picture", render_time_ms as isize);
   fb.normalize();
   match fb.write_ppm("rendering.ppm") {
-    Ok(_) => {},
-    Err(_) => {println!("Failed saving the picture");}
+    Ok(_) => {}
+    Err(_) => {
+      println!("Failed saving the picture");
+    }
   }
 }

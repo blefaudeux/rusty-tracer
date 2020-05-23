@@ -9,7 +9,7 @@ fn main() {
 
     let w = 960;
     let h = 540;
-    let samples_count = 1;
+    let samples_count = 5;
 
     engine::render(w, h, samples_count);
 }
