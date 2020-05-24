@@ -235,7 +235,7 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
   return (hit_type, hit_position, hit_normal);
 }
 
-fn trace_sample(mut ray: Ray) -> Vec3f {
+fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
   let mut color = Vec3f::zero();
   let mut attenuation = Vec3f::ones();
 
@@ -247,7 +247,6 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
   .normalized(); // Directional light
 
   let mut bounce_count = 3;
-  let mut rng = rand::thread_rng();
 
   while bounce_count > 0 {
     let hit = ray_marching(ray);
@@ -318,7 +317,7 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
   return color;
 }
 
-pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
+pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
   let position = Vec3f {
     x: -22.,
     y: 5.,
@@ -341,7 +340,6 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
 
   // Cross-product to get the up vector
   let up = goal.cross(left);
-  let mut rng = rand::thread_rng();
 
   println!("Rendering {}x{}", width, height);
   println!("{} threads used", rayon::current_num_threads());
@@ -371,21 +369,23 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
       let p_col = p / n_width * patch_size;
       let p_line_end = p_line + patch_size;
       let p_col_end = p_col + patch_size;
+      let mut rng_thread = rand::thread_rng();
 
       // Backproject locally, keep spatial coherency
       for i in p_col..p_col_end {
         for j in p_line..p_line_end {
           let mut color = Vec3f::zero();
+          let ray = Ray {
+            orig: position,
+            dir: (goal
+              + left.scaled(j as f64 - width as f64 / 2. + rng_thread.gen::<f64>())
+              + up.scaled(i as f64 - height as f64 / 2. + rng_thread.gen::<f64>()))
+            .normalized(),
+            hit_number: 0,
+          };
 
           for _ in 0..sample_per_pixel {
-            color += trace_sample(Ray {
-              orig: position,
-              dir: (goal
-                + left.scaled(i as f64 - width as f64 / 2. + rng.gen::<f64>())
-                + up.scaled(j as f64 - height as f64 / 2. + rng.gen::<f64>()))
-              .normalized(),
-              hit_number: 0,
-            });
+            color += trace_sample(ray, &mut rng_thread);
           }
 
           // Reinhard tone mapping
@@ -421,20 +421,27 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
     let mut k = 0;
     for j in p_height..p_height_end {
       for i in p_width..p_width_end {
-        frame.buffer[j][i] = render_patch[k];
+        frame.buffer[height - j - 1][width - i - 1] = render_patch[k];
         k += 1;
       }
     }
     p_width = p_width_end % frame.width;
   }
 
+  frame.normalize();
   // Compute render time
   let elapsed = start_time.elapsed();
   let render_time_ms = elapsed.as_secs() * 1_000 + u64::from(elapsed.subsec_nanos()) / 1_000_000;
+  let n_samples = width * height * sample_per_pixel as usize;
+  let samples_per_sec = n_samples as f64 / render_time_ms as f64 * 1000.;
   // Compute the equivalent sample per pixel for a one minute computation budget
   // TODO
 
-  println!("Done in {}ms, saving the picture", render_time_ms as isize);
+  println!(
+    "Done in {0:.2}s, {1:.1} kSamples per second.",
+    render_time_ms / 1000,
+    samples_per_sec / 1000.
+  );
   match frame.write_ppm("rendering.ppm") {
     Ok(_) => {}
     Err(_) => {
