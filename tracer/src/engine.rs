@@ -46,7 +46,8 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
   .as_bytes()
   .to_vec(); // R (without curve)
 
-  for i in 0..letters.len() / 4 {
+  let n_letters = letters.len() / 4;
+  for i in 0..n_letters {
     let begin = Vec3f {
       x: letters[4 * i] as f64 - 79.,
       y: letters[4 * i + 1] as f64 - 79.,
@@ -55,14 +56,14 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
     .scaled(0.5);
 
     let end = Vec3f {
-      x: letters[i + 2] as f64 - 79.,
+      x: letters[4 * i + 2] as f64 - 79.,
       y: letters[4 * i + 3] as f64 - 79.,
       z: 0.,
     }
     .scaled(0.5)
       - begin;
 
-    let o = f - begin + end.scaled(min(-min((begin - f).dot(end) / end.squared_norm(), 0.), 1.));
+    let o = f - begin - end.scaled(min(-min((begin - f).dot(end) / end.squared_norm(), 0.), 1.));
 
     distance = min(distance, o.squared_norm()); // compare squared distance.
   }
@@ -70,38 +71,33 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
   // Get real distance, not square distance, once all the comparisons are done
   distance = distance.sqrt();
 
-  // // Two curves (for P and R in PixaR) with hard-coded locations.
-  // let curves: [Vec3f; 2] = [
-  //   Vec3f {
-  //     x: 11.,
-  //     y: 6.,
-  //     z: 0.,
-  //   },
-  //   Vec3f {
-  //     x: -11.,
-  //     y: 6.,
-  //     z: 0.,
-  //   },
-  // ];
+  // Two curves (for P and R in PixaR) with hard-coded locations.
+  let curves: [Vec3f; 2] = [
+    Vec3f {
+      x: 11.,
+      y: 6.,
+      z: 0.,
+    },
+    Vec3f {
+      x: -11.,
+      y: 6.,
+      z: 0.,
+    },
+  ];
 
-  // for curve in curves.iter() {
-  //   let mut o = f - *curve;
-  //   let o_norm = o.norm();
+  for curve in curves.iter() {
+    let mut o = f - *curve;
+    let o_norm = o.norm();
 
-  //   let new_distance =
-  //     if o.x > 0. {
-  //       (o_norm - 2.).abs()
-  //     } else {
-  //       o.y += o.y;
-  //       // if o.y > 0. {
-  //       //   -2.
-  //       // } else {
-  //       //   2.
-  //       // }
-  //     o_norm};
+    let new_distance = if o.x > 0. {
+      (o_norm - 2.).abs()
+    } else {
+      o.y += o.y;
+      o_norm
+    };
 
-  //   distance = min(distance, new_distance);
-  // }
+    distance = min(distance, new_distance);
+  }
 
   distance = (distance.powi(8) + position.z.powi(8)).powf(0.125) - 0.5;
   hit_type = HitType::Letter;
@@ -255,7 +251,6 @@ fn trace_sample(mut ray: Ray) -> Vec3f {
     let hit_type = hit.0;
     let hit_pos = &hit.1;
     let hit_normal = &hit.2;
-    
     match hit_type {
       HitType::NoHit => break,
       HitType::Letter => {
@@ -338,7 +333,8 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
     y: 0.,
     z: -goal.x,
   }
-  .normalized().scaled(1./width as f64);
+  .normalized()
+  .scaled(1. / width as f64);
 
   // Cross-product to get the up vector
   let up = goal.cross(left);
@@ -377,15 +373,13 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
       }
       .scaled(255.);
 
-      fb.buffer[(height - y - 1) as usize][(width - x -1) as usize] = color;
+      fb.buffer[(height - y - 1) as usize][(width - x - 1) as usize] = color;
     }
   }
 
   // Compute render time
   let elapsed = start_time.elapsed();
-  let render_time_ms =
-  elapsed.as_secs() * 1_000 + u64::from(elapsed.subsec_nanos()) / 1_000_000;
-  
+  let render_time_ms = elapsed.as_secs() * 1_000 + u64::from(elapsed.subsec_nanos()) / 1_000_000;
   // Compute the equivalent sample per pixel for a one minute computation budget
   // TODO
 
