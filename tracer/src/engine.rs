@@ -3,10 +3,13 @@ use crate::geometry::box_test;
 use crate::geometry::min;
 use crate::geometry::Ray;
 use crate::geometry::Vec3f;
-use std::time::Instant;
 
 extern crate rand;
+extern crate rayon;
+use crate::engine::rayon::prelude::*;
+
 use rand::Rng;
+use std::time::Instant;
 
 enum HitType {
   NoHit,
@@ -341,40 +344,88 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
   let mut rng = rand::thread_rng();
 
   println!("Rendering {}x{}", width, height);
-  let mut fb = framebuffer::create_frame_buffer(width as usize, height as usize);
+  println!("{} threads used", rayon::current_num_threads());
+
+  let mut frame = framebuffer::create_frame_buffer(width as usize, height as usize);
   let start_time = Instant::now();
 
-  for y in 0..height {
-    for x in 0..width {
-      let mut color = Vec3f::zero();
+  // Distribute the computation over spatially coherent patches
+  let patch_size = 32;
 
-      for _ in 0..sample_per_pixel {
-        color += trace_sample(Ray {
-          orig: position,
-          dir: (goal
-            + left.scaled(x as f64 - width as f64 / 2. + rng.gen::<f64>())
-            + up.scaled(y as f64 - height as f64 / 2. + rng.gen::<f64>()))
-          .normalized(),
-          hit_number: 0,
-        });
+  if (frame.height % patch_size != 0) || (frame.width % patch_size != 0) {
+    println!("Dimensions mismatch")
+  }
+
+  let n_height = frame.height / patch_size;
+  let n_width = frame.width / patch_size;
+  let n_patches = n_height * n_width;
+
+  // Render, distribute the patches over threads
+  let render_queue: Vec<Vec<Vec3f>> = (0..n_patches)
+    .into_par_iter()
+    .map(|p| {
+      // Pre-allocate the patch
+      let mut buffer: Vec<Vec3f> = Vec::with_capacity(patch_size * patch_size);
+
+      let p_line = p % n_width * patch_size;
+      let p_col = p / n_width * patch_size;
+      let p_line_end = p_line + patch_size;
+      let p_col_end = p_col + patch_size;
+
+      // Backproject locally, keep spatial coherency
+      for i in p_col..p_col_end {
+        for j in p_line..p_line_end {
+          let mut color = Vec3f::zero();
+
+          for _ in 0..sample_per_pixel {
+            color += trace_sample(Ray {
+              orig: position,
+              dir: (goal
+                + left.scaled(i as f64 - width as f64 / 2. + rng.gen::<f64>())
+                + up.scaled(j as f64 - height as f64 / 2. + rng.gen::<f64>()))
+              .normalized(),
+              hit_number: 0,
+            });
+          }
+
+          // Reinhard tone mapping
+          color.scale(1. / sample_per_pixel as f64);
+          color.offset(14. / 241.);
+
+          let mut o = color;
+          o.offset(1.);
+
+          buffer.push(
+            Vec3f {
+              x: color.x / o.x,
+              y: color.y / o.y,
+              z: color.z / o.z,
+            }
+            .scaled(255.),
+          );
+        }
       }
+      buffer
+    })
+    .collect();
 
-      // Reinhard tone mapping
-      color.scale(1. / sample_per_pixel as f64);
-      color.offset(14. / 241.);
+  // Reconstruct the picture in the framebuffer
+  let mut p_width = 0;
+  let mut p_height;
 
-      let mut o = color;
-      o.offset(1.);
+  for (p, render_patch) in render_queue.iter().enumerate() {
+    p_height = (p / n_width) * patch_size;
+    let p_height_end = p_height + patch_size;
+    let p_width_end = p_width + patch_size;
 
-      color = Vec3f {
-        x: color.x / o.x,
-        y: color.y / o.y,
-        z: color.z / o.z,
+    let mut k = 0;
+    for j in p_height..p_height_end {
+      for i in p_width..p_width_end {
+        frame.buffer[j][i] = render_patch[k];
+        k += 1;
       }
-      .scaled(255.);
-
-      fb.buffer[(height - y - 1) as usize][(width - x - 1) as usize] = color;
     }
+    p_width = p_width_end % frame.width;
   }
 
   // Compute render time
@@ -384,8 +435,7 @@ pub fn render(width: i64, height: i64, sample_per_pixel: u8) {
   // TODO
 
   println!("Done in {}ms, saving the picture", render_time_ms as isize);
-  fb.normalize();
-  match fb.write_ppm("rendering.ppm") {
+  match frame.write_ppm("rendering.ppm") {
     Ok(_) => {}
     Err(_) => {
       println!("Failed saving the picture");
