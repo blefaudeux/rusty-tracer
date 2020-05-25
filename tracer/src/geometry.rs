@@ -7,7 +7,7 @@ pub struct Vec3f {
     pub x: f32,
     pub y: f32,
     pub z: f32,
-    _pad: f32, // Tentatively enable packed SIMD
+    // _pad: f32, // Tentatively enable packed SIMD
 }
 
 pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
@@ -15,7 +15,7 @@ pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
         x: x,
         y: y,
         z: z,
-        _pad: 0.,
+        // _pad: 0.,
     }
 }
 
@@ -88,7 +88,6 @@ impl Vec3f {
 
 // Rectangle CSG equation. Returns minimum signed distance from
 // space carved by lower_left vertex and opposite rectangle vertex upper_right.
-#[allow(dead_code)]
 pub fn box_test(position: Vec3f, lower_left: Vec3f, upper_right: Vec3f) -> f32 {
     let lower_left = position - lower_left;
     let upper_right = upper_right - position;
@@ -128,7 +127,9 @@ impl Neg for Vec3f {
 
 impl AddAssign for Vec3f {
     fn add_assign(&mut self, other: Vec3f) {
-        *self = new_vec3f(self.x + other.x, self.y + other.y, self.z + other.z);
+        self.x += other.x;
+        self.y += other.y;
+        self.z += other.z;
     }
 }
 

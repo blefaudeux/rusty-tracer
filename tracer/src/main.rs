@@ -10,6 +10,5 @@ fn main() {
     let w = 1024;
     let h = 768;
     let samples_count = 20;
-
     engine::render(w, h, samples_count);
 }
