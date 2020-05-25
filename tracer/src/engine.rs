@@ -79,13 +79,12 @@ fn sample_world(position: Vec3f) -> (f32, HitType) {
 
   for curve in curves.iter() {
     let mut o = f - *curve;
-    let o_norm = o.norm();
 
     let new_distance = if o.x > 0. {
-      (o_norm - 2.).abs()
+      (o.norm() - 2.).abs()
     } else {
       o.y += if o.y > 0. { -2. } else { 2. };
-      o_norm
+      o.norm()
     };
 
     distance = min(distance, new_distance);
