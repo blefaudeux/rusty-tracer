@@ -7,7 +7,7 @@ fn main() {
     // with help from Fabien Sanglard's
     // https://fabiensanglard.net/revisiting_the_pathtracer/index.html
 
-    let w = 1280;
+    let w = 1024;
     let h = 768;
     let samples_count = 20;
 

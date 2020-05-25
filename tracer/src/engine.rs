@@ -2,7 +2,7 @@ use crate::framebuffer;
 use crate::geometry::box_test;
 use crate::geometry::min;
 use crate::geometry::Ray;
-use crate::geometry::Vec3f;
+use crate::geometry::{new_vec3f, Vec3f};
 
 extern crate rand;
 extern crate rayon;
@@ -30,8 +30,8 @@ impl std::fmt::Display for HitType {
 }
 
 // Sample the world using Signed Distance Fields.
-fn sample_world(position: Vec3f) -> (f64, HitType) {
-  let mut distance: f64 = 1e9;
+fn sample_world(position: Vec3f) -> (f32, HitType) {
+  let mut distance: f32 = 1e9;
   let mut hit_type: HitType;
 
   let mut f = position; // Flattened position (z=0)
@@ -51,18 +51,18 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
 
   let n_letters = letters.len() / 4;
   for i in 0..n_letters {
-    let begin = Vec3f {
-      x: letters[4 * i] as f64 - 79.,
-      y: letters[4 * i + 1] as f64 - 79.,
-      z: 0.,
-    }
+    let begin = new_vec3f(
+      letters[4 * i] as f32 - 79.,
+      letters[4 * i + 1] as f32 - 79.,
+      0.,
+    )
     .scaled(0.5);
 
-    let end = Vec3f {
-      x: letters[4 * i + 2] as f64 - 79.,
-      y: letters[4 * i + 3] as f64 - 79.,
-      z: 0.,
-    }
+    let end = new_vec3f(
+      letters[4 * i + 2] as f32 - 79.,
+      letters[4 * i + 3] as f32 - 79.,
+      0.,
+    )
     .scaled(0.5)
       - begin;
 
@@ -75,18 +75,7 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
   distance = distance.sqrt();
 
   // Two curves (for P and R in PixaR) with hard-coded locations.
-  let curves: [Vec3f; 2] = [
-    Vec3f {
-      x: 11.,
-      y: 6.,
-      z: 0.,
-    },
-    Vec3f {
-      x: -11.,
-      y: 6.,
-      z: 0.,
-    },
-  ];
+  let curves: [Vec3f; 2] = [new_vec3f(11., 6., 0.), new_vec3f(-11., 6., 0.)];
 
   for curve in curves.iter() {
     let mut o = f - *curve;
@@ -112,49 +101,21 @@ fn sample_world(position: Vec3f) -> (f64, HitType) {
       // Lower room
       box_test(
         position,
-        Vec3f {
-          x: -30.,
-          y: -0.5,
-          z: -30.,
-        },
-        Vec3f {
-          x: 30.,
-          y: 18.,
-          z: 30.,
-        },
+        new_vec3f(-30., -0.5, -30.),
+        new_vec3f(30., 18., 30.),
       ),
       // Upper room
       box_test(
         position,
-        Vec3f {
-          x: -25.,
-          y: 17.,
-          z: -25.,
-        },
-        Vec3f {
-          x: 25.,
-          y: 20.,
-          z: 25.,
-        },
+        new_vec3f(-25., 17., -25.),
+        new_vec3f(25., 20., 25.),
       ),
     ),
     box_test(
       // Ceiling "planks" spaced 8 units apart.
-      Vec3f {
-        x: position.x.abs() % 8.,
-        y: position.y,
-        z: position.z,
-      },
-      Vec3f {
-        x: 1.5,
-        y: 18.5,
-        z: -25.,
-      },
-      Vec3f {
-        x: 6.5,
-        y: 20.,
-        z: 25.,
-      },
+      new_vec3f(position.x.abs() % 8., position.y, position.z),
+      new_vec3f(1.5, 18.5, -25.),
+      new_vec3f(6.5, 20., 25.),
     ),
   );
 
@@ -198,35 +159,11 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
     if (shortest_distance < 0.01) || no_hit_count > 99 {
       // We're close enough
       // Now get the normal by computing the gradient, use finite difference
-      hit_normal = Vec3f {
-        x: sample_world(
-          hit_position
-            + Vec3f {
-              x: 0.01,
-              y: 0.,
-              z: 0.,
-            },
-        )
-        .0 - shortest_distance,
-        y: sample_world(
-          hit_position
-            + Vec3f {
-              x: 0.,
-              y: 0.01,
-              z: 0.,
-            },
-        )
-        .0 - shortest_distance,
-        z: sample_world(
-          hit_position
-            + Vec3f {
-              x: 0.,
-              y: 0.,
-              z: 0.01,
-            },
-        )
-        .0 - shortest_distance,
-      }
+      hit_normal = new_vec3f(
+        sample_world(hit_position + new_vec3f(0.01, 0., 0.)).0 - shortest_distance,
+        sample_world(hit_position + new_vec3f(0., 0.01, 0.)).0 - shortest_distance,
+        sample_world(hit_position + new_vec3f(0., 0., 0.01)).0 - shortest_distance,
+      )
       .normalized();
       break;
     }
@@ -239,12 +176,7 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
   let mut color = Vec3f::zero();
   let mut attenuation = Vec3f::ones();
 
-  let light_direction = Vec3f {
-    x: 0.6,
-    y: 0.6,
-    z: 1.,
-  }
-  .normalized(); // Directional light
+  let light_direction = new_vec3f(0.6, 0.6, 1.).normalized(); // Directional light
 
   let mut bounce_count = 3;
 
@@ -262,21 +194,21 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
       }
       HitType::Wall => {
         let incidence = hit_normal.dot(light_direction);
-        let p: f64 = 6.283185 * rng.gen::<f64>();
-        let c = rng.gen::<f64>();
+        let p: f32 = 6.283185 * rng.gen::<f32>();
+        let c = rng.gen::<f32>();
         let s = (1. - c).sqrt();
         let g = if hit_normal.z < 0. { -1. } else { 1. };
         let u = -1. / (g + hit_normal.z);
         let v = hit_normal.x * hit_normal.y * u;
-        ray.dir = Vec3f {
-          x: v,
-          y: g + hit_normal.y * hit_normal.y * u,
-          z: -hit_normal.y * p.cos() * s,
-        } + Vec3f {
-          x: 1. + g * hit_normal.x * hit_normal.x * u,
-          y: g * v,
-          z: -g * hit_normal.x * p.sin() * s,
-        } + hit_normal.scaled(c.sqrt());
+        ray.dir = new_vec3f(
+          v,
+          g + hit_normal.y * hit_normal.y * u,
+          -hit_normal.y * p.cos() * s,
+        ) + new_vec3f(
+          1. + g * hit_normal.x * hit_normal.x * u,
+          g * v,
+          -g * hit_normal.x * p.sin() * s,
+        ) + hit_normal.scaled(c.sqrt());
 
         ray.orig = hit.1 + ray.dir.scaled(0.1);
         attenuation.scale(0.2);
@@ -290,25 +222,14 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
 
           match check_sun.0 {
             HitType::Sun => {
-              color += attenuation
-                * Vec3f {
-                  x: 500.,
-                  y: 400.,
-                  z: 100.,
-                }
-                .scaled(incidence);
+              color += attenuation * new_vec3f(500., 400., 100.).scaled(incidence);
             }
             _ => {}
           }
         }
       }
       HitType::Sun => {
-        color += attenuation
-          * Vec3f {
-            x: 50.,
-            y: 80.,
-            z: 100.,
-          };
+        color += attenuation * new_vec3f(50., 80., 100.);
         break; // Sun Color
       }
     }
@@ -317,26 +238,13 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
   return color;
 }
 
-pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
-  let position = Vec3f {
-    x: -22.,
-    y: 5.,
-    z: 25.,
-  };
+pub fn render(width: usize, height: usize, sample_per_pixel: usize) {
+  let position = new_vec3f(-22., 5., 25.);
 
-  let goal = (Vec3f {
-    x: -3.,
-    y: 4.,
-    z: 0.,
-  } - position)
-    .normalized();
-  let left = Vec3f {
-    x: goal.z,
-    y: 0.,
-    z: -goal.x,
-  }
-  .normalized()
-  .scaled(1. / width as f64);
+  let goal = (new_vec3f(-3., 4., 0.) - position).normalized();
+  let left = new_vec3f(goal.z, 0., -goal.x)
+    .normalized()
+    .scaled(1. / width as f32);
 
   // Cross-product to get the up vector
   let up = goal.cross(left);
@@ -348,10 +256,11 @@ pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
   let start_time = Instant::now();
 
   // Distribute the computation over spatially coherent patches
-  let patch_size = 32;
+  let patch_size = 16;
 
   if (frame.height % patch_size != 0) || (frame.width % patch_size != 0) {
     println!("Dimensions mismatch")
+    // TODO: Move patch_size to GCD in that case
   }
 
   let n_height = frame.height / patch_size;
@@ -378,8 +287,8 @@ pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
           let ray = Ray {
             orig: position,
             dir: (goal
-              + left.scaled(j as f64 - width as f64 / 2. + rng_thread.gen::<f64>())
-              + up.scaled(i as f64 - height as f64 / 2. + rng_thread.gen::<f64>()))
+              + left.scaled(j as f32 - width as f32 / 2. + rng_thread.gen::<f32>())
+              + up.scaled(i as f32 - height as f32 / 2. + rng_thread.gen::<f32>()))
             .normalized(),
             hit_number: 0,
           };
@@ -389,20 +298,16 @@ pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
           }
 
           // Reinhard tone mapping
-          color.scale(1. / sample_per_pixel as f64);
-          color.offset(14. / 241.);
+          let reinhard = |a: f32| -> f32 {
+            let b = a / sample_per_pixel as f32 + 14. / 241.;
+            b / (b + 1.) * 255.
+          };
 
-          let mut o = color;
-          o.offset(1.);
-
-          buffer.push(
-            Vec3f {
-              x: color.x / o.x,
-              y: color.y / o.y,
-              z: color.z / o.z,
-            }
-            .scaled(255.),
-          );
+          buffer.push(new_vec3f(
+            reinhard(color.x),
+            reinhard(color.y),
+            reinhard(color.z),
+          ));
         }
       }
       buffer
@@ -428,21 +333,18 @@ pub fn render(width: usize, height: usize, sample_per_pixel: u8) {
     p_width = p_width_end % frame.width;
   }
 
-  frame.normalize();
   // Compute render time
   let elapsed = start_time.elapsed();
   let render_time_ms = elapsed.as_secs() * 1_000 + u64::from(elapsed.subsec_nanos()) / 1_000_000;
   let n_samples = width * height * sample_per_pixel as usize;
-  let samples_per_sec = n_samples as f64 / render_time_ms as f64 * 1000.;
-  // Compute the equivalent sample per pixel for a one minute computation budget
-  // TODO
+  let samples_per_sec = n_samples as f32 / render_time_ms as f32 * 1000.;
 
   println!(
     "Done in {0:.2}s, {1:.1} kSamples per second.",
     render_time_ms / 1000,
     samples_per_sec / 1000.
   );
-  match frame.write_ppm("rendering.ppm") {
+  match frame.write_ppm("rendering.ppm", false) {
     Ok(_) => {}
     Err(_) => {
       println!("Failed saving the picture");

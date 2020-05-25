@@ -1,11 +1,22 @@
 use std::cmp;
 use std::ops::{Add, AddAssign, Mul, Neg, Sub};
 
+// TODO: Move to std::simd https://doc.rust-lang.org/1.2.0/std/simd/
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub struct Vec3f {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    _pad: f32, // Tentatively enable packed SIMD
+}
+
+pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
+    Vec3f {
+        x: x,
+        y: y,
+        z: z,
+        _pad: 0.,
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -26,7 +37,6 @@ where
     };
 }
 
-#[allow(dead_code)]
 impl Vec3f {
     pub fn normalized(&self) -> Vec3f {
         let mut other = *self;
@@ -34,98 +44,52 @@ impl Vec3f {
         other
     }
 
-    pub fn normalize_l0(&mut self) {
-        normalize_l0(self);
-    }
-
-    pub fn normalized_l0(&self) -> Vec3f {
-        let mut other = *self;
-        other.normalize_l0();
-        other
-    }
-
-    pub fn scale(&mut self, s: f64) {
+    pub fn scale(&mut self, s: f32) {
         self.x *= s;
         self.y *= s;
         self.z *= s;
     }
 
-    pub fn abs(&self) -> Vec3f {
-        Vec3f {
-            x: self.x.abs(),
-            y: self.y.abs(),
-            z: self.z.abs(),
-        }
-    }
-
-    pub fn scaled(&self, s: f64) -> Vec3f {
+    pub fn scaled(&self, s: f32) -> Vec3f {
         let mut other = *self;
         other.scale(s);
         other
     }
 
-    pub fn dot(self, other: Vec3f) -> f64 {
+    pub fn dot(self, other: Vec3f) -> f32 {
         dot(self, other)
     }
 
     pub fn cross(&self, other: Vec3f) -> Vec3f {
-        Vec3f {
-            x: self.y * other.z - self.z * other.y,
-            y: self.z * other.x - self.x * other.z,
-            z: self.x * other.y - self.y * other.x,
-        }
+        new_vec3f(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
     }
 
-    pub fn squared_norm(self) -> f64 {
+    pub fn squared_norm(self) -> f32 {
         dot(self, self)
     }
 
-    pub fn add(&mut self, other: Vec3f) {
-        self.x += other.x;
-        self.y += other.y;
-        self.z += other.z;
-    }
-
-    pub fn offset(&mut self, bias: f64) {
-        self.x += bias;
-        self.y += bias;
-        self.z += bias;
-    }
-
-    pub fn max(&self) -> f64 {
-        f64::max(f64::max(self.x, self.y), self.z)
-    }
-
-    pub fn min(&self) -> f64 {
-        f64::min(f64::max(self.x, self.y), self.z)
-    }
-
-    pub fn norm(&self) -> f64 {
+    pub fn norm(&self) -> f32 {
         self.squared_norm().sqrt()
     }
 
     // Common values
     pub fn zero() -> Vec3f {
-        Vec3f {
-            x: 0.,
-            y: 0.,
-            z: 0.,
-        }
+        new_vec3f(0., 0., 0.)
     }
 
     pub fn ones() -> Vec3f {
-        Vec3f {
-            x: 1.,
-            y: 1.,
-            z: 1.,
-        }
+        new_vec3f(1., 1., 1.)
     }
 }
 
 // Rectangle CSG equation. Returns minimum signed distance from
 // space carved by lower_left vertex and opposite rectangle vertex upper_right.
 #[allow(dead_code)]
-pub fn box_test(position: Vec3f, lower_left: Vec3f, upper_right: Vec3f) -> f64 {
+pub fn box_test(position: Vec3f, lower_left: Vec3f, upper_right: Vec3f) -> f32 {
     let lower_left = position - lower_left;
     let upper_right = upper_right - position;
 
@@ -146,22 +110,11 @@ fn normalize(vec: &mut Vec3f) {
     }
 }
 
-fn normalize_l0(vec: &mut Vec3f) {
-    let norm = vec.x.max(vec.y).max(vec.z);
-    if norm > 0. {
-        vec.scale(1. / norm);
-    }
-}
-
 impl Add for Vec3f {
     type Output = Vec3f;
 
     fn add(self, other: Vec3f) -> Vec3f {
-        Vec3f {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-        }
+        new_vec3f(self.x + other.x, self.y + other.y, self.z + other.z)
     }
 }
 
@@ -169,43 +122,27 @@ impl Neg for Vec3f {
     type Output = Vec3f;
 
     fn neg(self) -> Vec3f {
-        Vec3f {
-            x: -self.x,
-            y: -self.y,
-            z: -self.z,
-        }
+        new_vec3f(-self.x, -self.y, -self.z)
     }
 }
 
 impl AddAssign for Vec3f {
     fn add_assign(&mut self, other: Vec3f) {
-        *self = Vec3f {
-            x: self.x + other.x,
-            y: self.y + other.y,
-            z: self.z + other.z,
-        };
+        *self = new_vec3f(self.x + other.x, self.y + other.y, self.z + other.z);
     }
 }
 
 impl Mul for Vec3f {
     type Output = Self;
     fn mul(self, other: Vec3f) -> Vec3f {
-        Vec3f {
-            x: self.x * other.x,
-            y: self.y * other.y,
-            z: self.z * other.z,
-        }
+        new_vec3f(self.x * other.x, self.y * other.y, self.z * other.z)
     }
 }
 
 impl Sub for Vec3f {
     type Output = Self;
     fn sub(self, other: Vec3f) -> Vec3f {
-        Vec3f {
-            x: self.x - other.x,
-            y: self.y - other.y,
-            z: self.z - other.z,
-        }
+        new_vec3f(self.x - other.x, self.y - other.y, self.z - other.z)
     }
 }
 
@@ -215,233 +152,6 @@ impl std::fmt::Display for Vec3f {
     }
 }
 
-fn dot(v1: Vec3f, v2: Vec3f) -> f64 {
-    (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z) as f64
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_ones() {
-        let start = Vec3f::ones();
-        assert![start.x == 1. && start.y == 1. && start.z == 1.];
-    }
-
-    #[test]
-    fn test_scale() {
-        {
-            let start = Vec3f::ones();
-            let start_scaled = start.scaled(1.36);
-            assert![start_scaled.x == 1.36 && start_scaled.y == 1.36 && start_scaled.z == 1.36];
-        }
-        {
-            let mut start_scale = Vec3f::ones();
-            start_scale.scale(1.36);
-            assert![start_scale.x == 1.36 && start_scale.y == 1.36 && start_scale.z == 1.36];
-        }
-        {
-            let start = Vec3f {
-                x: 1.,
-                y: 2.,
-                z: 3.,
-            };
-            let start_scaled = start.scaled(1.36);
-            assert![start_scaled.x == 1.36 && start_scaled.y == 2.72 && start_scaled.z == 4.08];
-        }
-    }
-
-    #[test]
-    fn test_dot() {
-        {
-            let a = Vec3f {
-                x: 0.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 1.,
-                y: 0.,
-                z: 0.,
-            };
-            assert![a.dot(b) == 0.];
-        }
-        {
-            let a = Vec3f {
-                x: 0.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 0.,
-                y: 1.,
-                z: 0.,
-            };
-            assert![a.dot(b) == 1.];
-        }
-        {
-            let a = Vec3f {
-                x: 0.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 0.,
-                y: -1.,
-                z: 0.,
-            };
-            assert![a.dot(b) == -1.];
-        }
-        {
-            let a = Vec3f {
-                x: 1.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 1.,
-                y: -1.,
-                z: 0.,
-            };
-            assert![a.dot(b) == 0.];
-        }
-    }
-    #[test]
-    fn test_norm() {
-        {
-            let a = Vec3f {
-                x: 42.,
-                y: 1.,
-                z: 0.,
-            };
-            assert![a.squared_norm() == 42. * 42. + 1.];
-        }
-        {
-            let a = Vec3f {
-                x: 42.,
-                y: 1.,
-                z: 0.,
-            };
-            assert![a.normalized().squared_norm() == 1.];
-        }
-        {
-            let mut a = Vec3f {
-                x: 42.,
-                y: 1.,
-                z: 0.,
-            };
-            a.normalize_l0();
-            assert![a.x == 1.];
-        }
-    }
-    #[test]
-    fn test_cross() {
-        {
-            let a = Vec3f {
-                x: 42.,
-                y: 1.,
-                z: 0.,
-            };
-            assert![a.cross(a).squared_norm() == 0.];
-        }
-        {
-            let a = Vec3f {
-                x: 42.,
-                y: 1.,
-                z: 0.,
-            };
-            assert_eq![a.cross(-a).squared_norm(), 0.];
-        }
-        {
-            let a = Vec3f {
-                x: 1.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 1.,
-                y: -1.,
-                z: 0.,
-            };
-            assert_eq![a.cross(b).dot(a), 0.];
-        }
-        {
-            let a = Vec3f {
-                x: 1.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 1.,
-                y: -1.,
-                z: 0.,
-            };
-            assert_eq![
-                a.cross(b).squared_norm(),
-                a.squared_norm() * b.squared_norm()
-            ];
-        }
-        {
-            let a = Vec3f {
-                x: 1.,
-                y: 1.,
-                z: 0.,
-            };
-            let b = Vec3f {
-                x: 1.,
-                y: 0.,
-                z: 0.,
-            };
-            println!["{}", a.cross(b).squared_norm()];
-            println![
-                "{}",
-                a.squared_norm() * b.squared_norm() * (std::f64::consts::PI / 4.).sin().powf(2.)
-            ];
-
-            assert![
-                a.cross(b).squared_norm()
-                    - a.squared_norm()
-                        * b.squared_norm()
-                        * (std::f64::consts::PI / 4.).sin().powf(2.)
-                    < 1e-4
-            ];
-        }
-    }
-
-    #[test]
-    fn test_squared_norm() {
-        let a = Vec3f {
-            x: 1.,
-            y: -2.,
-            z: 3.,
-        };
-        assert_eq![a.squared_norm(), 14.];
-    }
-
-    #[test]
-    fn test_add() {
-        let a = Vec3f {
-            x: 1.,
-            y: -2.,
-            z: 3.,
-        };
-
-        let b = Vec3f {
-            x: 4.,
-            y: -2.,
-            z: 2.,
-        };
-
-        assert_eq![
-            a + b,
-            Vec3f {
-                x: 5.,
-                y: -4.,
-                z: 5.
-            }
-        ];
-
-        assert_eq![a - a, Vec3f::zero()];
-    }
+fn dot(v1: Vec3f, v2: Vec3f) -> f32 {
+    (v1.x * v2.x + v1.y * v2.y + v1.z * v2.z) as f32
 }
