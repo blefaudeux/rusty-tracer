@@ -84,7 +84,7 @@ fn sample_world(position: Vec3f) -> (f32, HitType) {
     let new_distance = if o.x > 0. {
       (o_norm - 2.).abs()
     } else {
-      o.y += o.y;
+      o.y += if o.y > 0. { -2. } else { 2. };
       o_norm
     };
 
@@ -182,6 +182,7 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
 
   while bounce_count > 0 {
     let hit = ray_marching(ray);
+    // TODO: return a structure instead
     let hit_type = hit.0;
     let hit_pos = &hit.1;
     let hit_normal = &hit.2;
