@@ -7,8 +7,8 @@ fn main() {
     // with help from Fabien Sanglard's
     // https://fabiensanglard.net/revisiting_the_pathtracer/index.html
 
-    let w = 1024;
-    let h = 768;
-    let samples_count = 20;
+    let w = 320;
+    let h = 240;
+    let samples_count = 5;
     engine::render(w, h, samples_count);
 }

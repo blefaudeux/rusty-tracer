@@ -135,7 +135,13 @@ fn sample_world(position: Vec3f) -> (f32, HitType) {
 
 // Perform signed sphere marching
 // Returns hit_type 0, 1, 2, or 3 and update hit position/normal
-fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
+struct Hit {
+  hit_type: HitType,
+  pose: Vec3f,
+  normal: Vec3f,
+}
+
+fn ray_marching(ray: Ray) -> Hit {
   let mut hit_type = HitType::NoHit;
   let mut no_hit_count = 0;
   let mut hit_position: Vec3f = Vec3f::ones();
@@ -168,7 +174,11 @@ fn ray_marching(ray: Ray) -> (HitType, Vec3f, Vec3f) {
     }
   }
 
-  return (hit_type, hit_position, hit_normal);
+  return Hit {
+    hit_type: hit_type,
+    pose: hit_position,
+    normal: hit_normal,
+  };
 }
 
 fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
@@ -181,46 +191,43 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
 
   while bounce_count > 0 {
     let hit = ray_marching(ray);
-    // TODO: return a structure instead
-    let hit_type = hit.0;
-    let hit_pos = &hit.1;
-    let hit_normal = &hit.2;
-    match hit_type {
+
+    match hit.hit_type {
       HitType::NoHit => break,
       HitType::Letter => {
-        ray.dir = ray.dir - hit_normal.scaled(2. * hit_normal.dot(ray.dir));
+        ray.dir = ray.dir - hit.normal.scaled(2. * hit.normal.dot(ray.dir));
         ray.orig = ray.orig + ray.dir.scaled(0.1);
         attenuation.scale(0.2); // Attenuation via distance traveled.
       }
       HitType::Wall => {
-        let incidence = hit_normal.dot(light_direction);
+        let incidence = hit.normal.dot(light_direction);
         let p: f32 = 6.283185 * rng.gen::<f32>();
         let c = rng.gen::<f32>();
         let s = (1. - c).sqrt();
-        let g = if hit_normal.z < 0. { -1. } else { 1. };
-        let u = -1. / (g + hit_normal.z);
-        let v = hit_normal.x * hit_normal.y * u;
+        let g = if hit.normal.z < 0. { -1. } else { 1. };
+        let u = -1. / (g + hit.normal.z);
+        let v = hit.normal.x * hit.normal.y * u;
         ray.dir = new_vec3f(
           v,
-          g + hit_normal.y * hit_normal.y * u,
-          -hit_normal.y * p.cos() * s,
+          g + hit.normal.y * hit.normal.y * u,
+          -hit.normal.y * p.cos() * s,
         ) + new_vec3f(
-          1. + g * hit_normal.x * hit_normal.x * u,
+          1. + g * hit.normal.x * hit.normal.x * u,
           g * v,
-          -g * hit_normal.x * p.sin() * s,
-        ) + hit_normal.scaled(c.sqrt());
+          -g * hit.normal.x * p.sin() * s,
+        ) + hit.normal.scaled(c.sqrt());
 
-        ray.orig = hit.1 + ray.dir.scaled(0.1);
+        ray.orig = hit.pose + ray.dir.scaled(0.1);
         attenuation.scale(0.2);
 
         if incidence > 0. {
           let check_sun = ray_marching(Ray {
-            orig: *hit_pos + hit_normal.scaled(0.1),
+            orig: hit.pose + hit.normal.scaled(0.1),
             dir: light_direction,
             hit_number: 0,
           });
 
-          match check_sun.0 {
+          match check_sun.hit_type {
             HitType::Sun => {
               color += attenuation * new_vec3f(500., 400., 100.).scaled(incidence);
             }
