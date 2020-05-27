@@ -7,7 +7,7 @@ pub struct Vec3f {
     pub x: f32,
     pub y: f32,
     pub z: f32,
-    // _pad: f32, // Tentatively enable packed SIMD
+    _pad: f32, // Tentatively enable packed SIMD
 }
 
 pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
@@ -15,7 +15,7 @@ pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
         x: x,
         y: y,
         z: z,
-        // _pad: 0.,
+        _pad: 0.,
     }
 }
 
