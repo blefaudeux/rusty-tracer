@@ -1,5 +1,5 @@
 use std::cmp;
-use std::ops::{Add, AddAssign, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, Neg, Sub};
 
 // TODO: Move to std::simd https://doc.rust-lang.org/1.2.0/std/simd/
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -23,7 +23,6 @@ pub fn new_vec3f(x: f32, y: f32, z: f32) -> Vec3f {
 pub struct Ray {
     pub orig: Vec3f,
     pub dir: Vec3f,
-    pub hit_number: u8,
 }
 
 pub fn min<T>(v1: T, v2: T) -> T
@@ -140,6 +139,20 @@ impl Mul for Vec3f {
     }
 }
 
+impl Div for Vec3f {
+    type Output = Self;
+    fn div(self, other: Vec3f) -> Vec3f {
+        new_vec3f(self.x / other.x, self.y / other.y, self.z / other.z)
+    }
+}
+
+impl DivAssign for Vec3f {
+    fn div_assign(&mut self, other: Vec3f) {
+        self.x /= other.x;
+        self.y /= other.y;
+        self.z /= other.z;
+    }
+}
 impl Sub for Vec3f {
     type Output = Self;
     fn sub(self, other: Vec3f) -> Vec3f {

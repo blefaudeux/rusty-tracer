@@ -184,12 +184,11 @@ fn ray_marching(ray: Ray) -> Hit {
 fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
   let mut color = Vec3f::zero();
   let mut attenuation = Vec3f::ones();
+  let max_bounce_count = 3;
 
   let light_direction = new_vec3f(0.6, 0.6, 1.).normalized(); // Directional light
 
-  let mut bounce_count = 3;
-
-  while bounce_count > 0 {
+  for _ in 0..max_bounce_count {
     let hit = ray_marching(ray);
 
     match hit.hit_type {
@@ -224,7 +223,6 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
           let check_sun = ray_marching(Ray {
             orig: hit.pose + hit.normal.scaled(0.1),
             dir: light_direction,
-            hit_number: 0,
           });
 
           match check_sun.hit_type {
@@ -240,7 +238,6 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
         break; // Sun Color
       }
     }
-    bounce_count -= 1;
   }
   return color;
 }
@@ -263,7 +260,7 @@ pub fn render(width: usize, height: usize, sample_per_pixel: usize) {
   let start_time = Instant::now();
 
   // Distribute the computation over spatially coherent patches
-  let patch_size = 16;
+  let patch_size = 20;
 
   if (frame.height % patch_size != 0) || (frame.width % patch_size != 0) {
     println!("Dimensions mismatch")
@@ -297,7 +294,6 @@ pub fn render(width: usize, height: usize, sample_per_pixel: usize) {
               + left.scaled(j as f32 - width as f32 / 2. + rng_thread.gen::<f32>())
               + up.scaled(i as f32 - height as f32 / 2. + rng_thread.gen::<f32>()))
             .normalized(),
-            hit_number: 0,
           };
 
           for _ in 0..sample_per_pixel {
