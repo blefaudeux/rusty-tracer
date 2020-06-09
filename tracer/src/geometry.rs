@@ -1,5 +1,5 @@
 use std::cmp;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, Neg, Sub};
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, Neg, Sub, SubAssign};
 
 // TODO: Move to std::simd https://doc.rust-lang.org/1.2.0/std/simd/
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
@@ -129,6 +129,14 @@ impl AddAssign for Vec3f {
         self.x += other.x;
         self.y += other.y;
         self.z += other.z;
+    }
+}
+
+impl SubAssign for Vec3f {
+    fn sub_assign(&mut self, other: Vec3f) {
+        self.x -= other.x;
+        self.y -= other.y;
+        self.z -= other.z;
     }
 }
 

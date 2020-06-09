@@ -9,6 +9,6 @@ fn main() {
 
     let w = 960;
     let h = 540;
-    let samples_count = 20;
+    let samples_count = 200;
     engine::render(w, h, samples_count);
 }

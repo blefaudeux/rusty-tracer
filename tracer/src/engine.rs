@@ -194,8 +194,8 @@ fn trace_sample(mut ray: Ray, rng: &mut rand::ThreadRng) -> Vec3f {
     match hit.hit_type {
       HitType::NoHit => break,
       HitType::Letter => {
-        ray.dir = ray.dir - hit.normal.scaled(2. * hit.normal.dot(ray.dir));
-        ray.orig = ray.orig + ray.dir.scaled(0.1);
+        ray.dir -= hit.normal.scaled(2. * hit.normal.dot(ray.dir));
+        ray.orig += ray.dir.normalized().scaled(0.1);
         attenuation.scale(0.2); // Attenuation via distance traveled.
       }
       HitType::Wall => {
